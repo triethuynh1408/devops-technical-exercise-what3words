@@ -43,7 +43,33 @@ in-flight `/work` request before the process exits 0.
 
 ## Task 2 — Local Kubernetes cluster
 
-_TODO_
+`kind`, 1 control-plane + 2 workers, defined in `cluster/kind-config.yaml` with
+`cluster/create-cluster.sh` (idempotent) and `delete-cluster.sh`.
+
+Chose kind over k3d and minikube: multi-node in one Docker daemon with no VM,
+sub-minute create/destroy, and `kind load docker-image` means no registry. k3d
+would have been an equally reasonable pick. minikube's multi-node mode is
+heavier and I've found it less reliable to reproduce.
+
+Two things in the config are deliberate:
+
+- **Node image pinned by digest**, not a tag. It's the multi-arch index for
+  `kindest/node:v1.37.0` (kind 0.33.0's default), so the reviewer gets the exact
+  same Kubernetes version on amd64 or arm64.
+- **App scheduled onto workers only** — the control-plane keeps its `NoSchedule`
+  taint. Otherwise "lose a node, stay up" in Task 3 isn't actually exercised
+  because a 2-of-3 spread could include the control-plane.
+
+For outside access I map host `8080` to node `30080` via `extraPortMappings` and
+make the chart's Service a `NodePort` pinned to `30080`. This couples the cluster
+config to one value in the chart, which I dislike, but the alternatives are
+worse for a hand-off: an ingress controller is a lot of moving parts to install
+and document, and `kubectl port-forward` isn't "reachable from outside the
+cluster" so much as tunnelled into it. Reasoning repeated in Task 3.
+
+Verified: `create-cluster.sh` brings up 3 Ready nodes from a clean state in
+~30s; control-plane carries the taint; `localhost:8080` on the host maps to
+`30080` on the control-plane container.
 
 ## Task 3 — Packaging
 

@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "greeter.fullname" . }}
+  labels:
+    {{- include "greeter.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "greeter.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Never drop below the desired ready count during a rollout; bring one
+      # extra pod up first, then retire an old one.
+      maxUnavailable: {{ .Values.rollingUpdate.maxUnavailable }}
+      maxSurge: {{ .Values.rollingUpdate.maxSurge }}
+  template:
+    metadata:
+      labels:
+        {{- include "greeter.labels" . | nindent 8 }}
+      annotations:
+        # Roll the pods when the ConfigMap content changes. Without this,
+        # `helm upgrade` would edit the ConfigMap but leave pods on stale env.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if .Values.metrics.annotations }}
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: {{ .Values.config.port | quote }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "greeter.fullname" . }}
+      automountServiceAccountToken: false
+      # Covers the app's full shutdown sequence: fail readiness, wait
+      # SHUTDOWN_DELAY_SECONDS, then drain in-flight for up to
+      # DRAIN_TIMEOUT_SECONDS, then exit 0. Kubelet must not SIGKILL before
+      # that finishes.
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      # Keep every replica off the same node, so losing one node cannot remove
+      # all of them. Soft: see DECISIONS.md for why not a hard podAntiAffinity.
+      topologySpreadConstraints:
+        - maxSkew: {{ .Values.topologySpread.maxSkew }}
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: {{ .Values.topologySpread.whenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              {{- include "greeter.selectorLabels" . | nindent 14 }}
+      containers:
+        - name: greeter
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.config.port }}
+              protocol: TCP
+          # Every value comes from the ConfigMap; nothing is baked into the image.
+          envFrom:
+            - configMapRef:
+                name: {{ include "greeter.fullname" . }}
+          # Liveness on /healthz, which returns 200 from the moment the listener
+          # binds — independent of the warm-up. initialDelay 10 + 3x10 failure
+          # budget means a restart only after ~30s of solid failure, so this
+          # can't trip during the 30s warm-up or during the drain. No
+          # startupProbe is needed for the same reason.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          # Readiness on /readyz: 503 for the whole 30s warm-up (expected — it
+          # just keeps the pod out of the Service), and 503 again the instant
+          # shutdown starts. period 2 x failure 2 => marked NotReady within
+          # ~5s, comfortably inside the 10s SHUTDOWN_DELAY_SECONDS window, so
+          # kube-proxy stops routing here before the listener closes.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 2
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]

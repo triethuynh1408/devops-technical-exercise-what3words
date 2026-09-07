@@ -1,0 +1,23 @@
+{{ .Chart.Name }} release "{{ .Release.Name }}" deployed to namespace "{{ .Release.Namespace }}".
+
+Replicas:   {{ .Values.replicaCount }}
+Greeting:   {{ .Values.config.greetingName }}
+Image:      {{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
+
+Reach it from outside the cluster:
+
+{{- if eq .Values.service.type "NodePort" }}
+  The kind cluster maps host localhost:8080 -> nodePort {{ .Values.service.nodePort }}:
+
+    curl http://localhost:8080/
+    curl http://localhost:8080/readyz
+
+  On any other cluster, hit <node-ip>:{{ .Values.service.nodePort }}.
+{{- else }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "greeter.fullname" . }} 8080:{{ .Values.service.port }}
+  curl http://localhost:8080/
+{{- end }}
+
+Watch a rollout or a drain:
+
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/instance={{ .Release.Name }} -o wide -w

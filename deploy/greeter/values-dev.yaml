@@ -1,0 +1,12 @@
+# dev overrides. Only what differs from values.yaml.
+config:
+  greetingName: "dev team"
+
+image:
+  tag: "dev"
+
+replicaCount: 2
+
+service:
+  # host localhost:8080 -> this nodePort (cluster/kind-config.yaml)
+  nodePort: 30080

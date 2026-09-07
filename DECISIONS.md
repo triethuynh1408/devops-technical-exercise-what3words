@@ -73,7 +73,110 @@ Verified: `create-cluster.sh` brings up 3 Ready nodes from a clean state in
 
 ## Task 3 — Packaging
 
-_TODO_
+Helm, hand-written. Chart in `deploy/greeter/`. Five templates plus a ~20-line
+helpers file — Deployment, Service, ConfigMap, ServiceAccount, PDB. Chose Helm
+over Kustomize mainly for Task 4: the Terraform `helm` provider is a single
+`helm_release` per environment, whereas driving Kustomize from Terraform means
+`kubectl_manifest` per object or a shell-out.
+
+### Probes — the actual numbers
+
+The app's contract (from `main.go` / `server.go`): `/healthz` is 200 from the
+moment the listener binds; `/readyz` is 503 for `WARMUP_SECONDS` (30), then 200,
+then 503 again the instant `SIGTERM` arrives; after `SIGTERM` it keeps serving
+for `SHUTDOWN_DELAY_SECONDS` (10), then drains in-flight for up to
+`DRAIN_TIMEOUT_SECONDS` (20), then exits 0.
+
+- **readiness `/readyz`**: `period 2`, `failureThreshold 2` → a pod is pulled
+  from the Service within ~5s of `SIGTERM`, well inside the 10s window the app
+  gives you before it stops accepting connections. `initialDelaySeconds 3` — no
+  need to wait out the warm-up, a failing readiness check just keeps the pod out
+  of rotation, which is the correct state during warm-up anyway.
+- **liveness `/healthz`**: `initialDelay 10`, `period 10`, `failureThreshold 3`
+  → only restarts after ~30s of solid failure. Because `/healthz` is up
+  independent of the warm-up, this can't false-fire during those 30s.
+- **no `startupProbe`**: it would be inert here — `/healthz` passes ~1s in
+  regardless of `WARMUP_SECONDS`, so liveness already can't trip during startup.
+- **no `preStop` hook**: the app already does "fail readiness, then sleep" as its
+  first shutdown step. A preStop sleep would stack on top and double the delay.
+
+### `terminationGracePeriodSeconds: 45`
+
+`SHUTDOWN_DELAY (10) + DRAIN_TIMEOUT (20) = 30`, + 15s headroom for kubelet and
+the container runtime. If someone raises those three env values they must raise
+this too — there's a loud comment in `values.yaml` saying so. I considered
+computing it in the template (`add shutdownDelay drainTimeout 15`) and decided
+an explicit number with a comment is easier to eyeball and justify.
+
+### Staying up across a node loss
+
+`topologySpreadConstraints`, `maxSkew: 1` on `kubernetes.io/hostname`,
+`whenUnsatisfiable: ScheduleAnyway` (soft). Plus a PDB `minAvailable: 1` and a
+rollout strategy of `maxUnavailable: 0 / maxSurge: 1`.
+
+Rejected a hard `requiredDuringScheduling` podAntiAffinity: on a 2-worker
+cluster it strands prod's third replica as `Pending` forever, and it can stall a
+rollout because the surge pod has nowhere to land. Soft spread gives 1-1 for dev
+and 2-1 for prod and never blocks scheduling. The cost is that a pod *can*
+occasionally double up on a node (e.g. right after a drain); the next rollout
+rebalances it. For a real cluster with three or more nodes I'd keep the soft
+spread but could afford a hard anti-affinity too.
+
+The PDB's `minAvailable: 1` is a floor, not "keep N-1". Draining a node with 2 of
+prod's 3 pods on it will evict both and briefly leave prod at 1. That satisfies
+"survive a single node" but for real prod I'd set `minAvailable` to a percentage
+or `replicaCount - 1`.
+
+### Config without rebuilding
+
+Every setting is in a ConfigMap consumed via `envFrom`. `helm upgrade --set
+config.greetingName=...` changes it, and a `checksum/config` annotation on the
+pod template rolls the pods so they pick it up — without that, env-from-ConfigMap
+changes leave running pods on stale values.
+
+### Security context
+
+The image is already non-root; the chart adds `runAsNonRoot`, `runAsUser 65532`,
+`readOnlyRootFilesystem: true`, `cap drop ALL`, `allowPrivilegeEscalation:
+false`, `seccompProfile: RuntimeDefault`. The app writes only to stdout, so a
+read-only root filesystem needs no `emptyDir` for `/tmp` (verified — pods run
+clean).
+
+### Resources — the opinionated bit
+
+Memory gets a request and a limit. CPU gets a request only, **no limit**. A CPU
+limit on a small latency-sensitive HTTP service mostly buys you throttling under
+burst for no real isolation benefit on a cluster that isn't oversubscribed. This
+goes against the common "always set both" rule and I'd expect to defend it — in a
+noisy multi-tenant cluster with hostile neighbours I'd add the limit back.
+
+### Considered and rejected
+
+- **Kustomize** — fine choice, base + `dev`/`prod` overlays. Lost to Helm on the
+  Terraform integration story (above) and on `--set`/`checksum` ergonomics.
+- **Ingress** — a controller to install, configure and document for one HTTP
+  service on a local cluster. NodePort + a kind port-mapping is two lines and
+  genuinely "outside the cluster". Would revisit for anything real (TLS, vhosts).
+- **`kubectl port-forward`** as the access story — it's a tunnel into the
+  cluster, not external reachability, and it dies with the terminal.
+- **HPA** — no load-based scaling requirement, and it fights a Terraform-managed
+  `replicaCount`. Out of scope.
+- **ServiceMonitor / PrometheusRule in the chart** — belongs with Extension B,
+  and shipping CRD-dependent templates that no-op without the operator installed
+  is a trap. Plain `prometheus.io/scrape` annotations instead.
+
+### Verified on the kind cluster
+
+- `helm install` dev + prod side by side; dev on `localhost:8080`, prod on
+  `localhost:8081`; all endpoints correct; pods land one-per-worker.
+- `0/1` Ready for ~30s then Ready — readiness tracks the warm-up; **0 restarts**,
+  so liveness never false-fired.
+- **Rolling update under load** (`helm upgrade --set config.greetingName`):
+  400/400 requests returned 200, greeting changed mid-stream, ConfigMap
+  propagated.
+- **`kubectl drain` of a worker under load** on `/work?ms=800` (in-flight
+  requests): 168/168 returned 200; the evicted pod rescheduled onto the other
+  worker; PDB allowed the drain without going to zero.
 
 ## Task 4 — Terraform
 

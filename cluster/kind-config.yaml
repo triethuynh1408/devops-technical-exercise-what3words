@@ -13,13 +13,17 @@ name: w3w-exercise
 nodes:
   - role: control-plane
     image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
-    # Publish the app's NodePort (30080, set in the Helm chart) on the host as
-    # localhost:8080. kube-proxy routes a NodePort from any node, so mapping it
-    # on the control-plane still reaches pods on the workers, and it lets the
-    # two workers stay byte-for-byte identical for the node-loss test.
+    # Publish each environment's NodePort on the host: dev on localhost:8080
+    # (nodePort 30080), prod on localhost:8081 (nodePort 30081). kube-proxy
+    # routes a NodePort from any node, so mapping them on the control-plane
+    # still reaches pods on the workers, and it lets the two workers stay
+    # byte-for-byte identical for the node-loss test.
     extraPortMappings:
       - containerPort: 30080
         hostPort: 8080
+        protocol: TCP
+      - containerPort: 30081
+        hostPort: 8081
         protocol: TCP
   - role: worker
     image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5

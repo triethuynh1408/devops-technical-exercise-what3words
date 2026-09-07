@@ -1,0 +1,9 @@
+apiVersion: v2
+name: greeter
+description: The what3words DevOps exercise sample HTTP service.
+type: application
+
+# Chart version — bumped when the templates change.
+version: 0.1.0
+# App version — the default image tag / VERSION string. Overridden per env.
+appVersion: "0.1.0"

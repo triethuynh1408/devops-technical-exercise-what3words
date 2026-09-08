@@ -180,7 +180,64 @@ noisy multi-tenant cluster with hostile neighbours I'd add the limit back.
 
 ## Task 4 — Terraform
 
-_TODO_
+`hashicorp/helm` provider (matches the Task 3 choice), one `helm_release` per
+environment. Structure: a shared `modules/greeter` plus thin
+`environments/dev` and `environments/prod` root directories.
+
+### Module + directories, not workspaces
+
+The module is the shared configuration. Each environment directory is a provider
+block, a module call, and a `terraform.tfvars` with the four values that differ
+(`greeting_name`, `replica_count`, `image_tag`, `node_port`). The chart's
+`values.yaml` still owns everything that doesn't vary, so nothing is defined
+twice.
+
+Rejected `terraform workspace`: all workspaces share one backend and one
+provider config, the selected workspace is stateful CLI context that's easy to
+forget, and you end up with `terraform.workspace` conditionals through the code.
+Separate directories give each environment an isolated state file and make it
+impossible to `apply` dev's config to prod by accident. The cost is that the two
+`main.tf` files are near-identical boilerplate (~15 lines) — I'd rather repeat
+that than the alternative.
+
+### Things worth noting
+
+- **`wait = true` + `atomic = true`.** `apply` blocks until the release's pods
+  are Ready, so a green apply means the service is actually serving; a failed
+  upgrade rolls back instead of leaving a half-applied release. `timeout` is 300s
+  to clear the 30s warm-up plus the serial rollout of all replicas.
+- **`replica_count` has a validation** rejecting anything below 2 — the
+  single-node-loss guarantee depends on it, so it shouldn't be settable to 1.
+- **Chart from a local path**, not a packaged/registry chart. Fine for this
+  exercise; a real setup would `helm package` to a registry (OCI or ChartMuseum)
+  and pin a chart version so infra state doesn't depend on the working tree.
+- **Local state, git-ignored.** `.terraform.lock.hcl` is committed to pin the
+  provider. Real: remote backend (S3+DynamoDB / GCS / TFC) with locking and
+  per-env state isolation.
+- **Image build/load is out of scope for Terraform.** `scripts/build-and-load.sh`
+  is the prerequisite. Terraform deploys, it doesn't build images.
+
+### Considered and rejected
+
+- **`kubernetes` provider instead of `helm`** — would mean re-expressing every
+  chart resource as a TF resource or using `kubernetes_manifest` (which needs the
+  API reachable at plan time and handles CRDs badly). The chart already exists
+  and is the Task 3 deliverable; wrapping it in one `helm_release` is far less
+  code.
+- **A single root module with a `for_each` over environments** — one `apply`
+  touches both environments, which is exactly what you don't want for a
+  dev/prod split. Blast radius should stop at one environment.
+- **Terragrunt** — solves the boilerplate-duplication problem well, but it's
+  another tool to install and learn for a reviewer, and the duplication here is
+  ~15 lines. Not worth it at this size.
+
+### Verified
+
+- `terraform apply` in each directory creates the release and blocks ~32s until
+  Ready; `curl localhost:8080` → "dev team", `localhost:8081` → "what3words".
+- Re-plan is clean (`No changes`).
+- Editing a tfvar (`greeting_name`, `replica_count`) produces an in-place update
+  plan, not a replacement.
 
 ## Extensions — order and why
 

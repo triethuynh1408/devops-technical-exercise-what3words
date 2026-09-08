@@ -3,7 +3,9 @@
 Why the solution looks the way it does. Written as I went, tidied at the end.
 The commits cover *what* changed.
 
-Status: in progress.
+The per-task sections below were written straight after each task. The
+cross-cutting sections (ambiguities, least sure about, production, left out)
+come after Task 4.
 
 ---
 
@@ -70,6 +72,8 @@ cluster" so much as tunnelled into it. Reasoning repeated in Task 3.
 Verified: `create-cluster.sh` brings up 3 Ready nodes from a clean state in
 ~30s; control-plane carries the taint; `localhost:8080` on the host maps to
 `30080` on the control-plane container.
+
+---
 
 ## Task 3 — Packaging
 
@@ -178,6 +182,8 @@ noisy multi-tenant cluster with hostile neighbours I'd add the limit back.
   requests): 168/168 returned 200; the evicted pod rescheduled onto the other
   worker; PDB allowed the drain without going to zero.
 
+---
+
 ## Task 4 — Terraform
 
 `hashicorp/helm` provider (matches the Task 3 choice), one `helm_release` per
@@ -239,10 +245,105 @@ that than the alternative.
 - Editing a tfvar (`greeting_name`, `replica_count`) produces an in-place update
   plan, not a replacement.
 
+---
+
+## Ambiguities in the brief, and what I assumed
+
+- **"Reachable from outside the cluster."** On a kind cluster there is no real
+  external load balancer. I read this as "reachable from the host by a
+  documented, reproducible mechanism" and used a NodePort published to
+  `localhost` via a kind port-mapping. If they meant a cloud LB / ingress with
+  DNS, that's an ingress-controller task and out of scope for a local exercise.
+- **"Without duplicating the whole configuration" (Task 4).** "The whole
+  configuration" is fuzzy. I took it to mean the *app* configuration — probe
+  timings, resources, chart structure — which is defined once in the chart. The
+  ~15 lines of provider + module wiring repeated per environment directory is
+  boilerplate, not configuration, and I accepted that over workspaces.
+- **"GREETING_NAME (and other env vars) configurable per environment."** I made
+  all six env vars values-driven through the ConfigMap, not just the greeting.
+- **Image tag vs `VERSION`.** The app has a separate `VERSION` env var. I chose
+  to set it equal to the image tag so `/version` and `greeter_build_info` never
+  lie about what's running. Not stated; seemed obviously right.
+- **`.gitignore`.** "Don't modify Go code under `app/`" — `.gitignore` isn't
+  code, so I extended it for Terraform artefacts.
+- **Commit granularity.** One commit per task. I've folded each task's
+  `DECISIONS.md` section into that task's commit (the brief says write it as you
+  go), and this consolidation pass is its own commit.
+- **"At least two worker nodes."** Took "at least" literally and used exactly
+  two. A third would make the anti-affinity story easier (see below) but isn't
+  required.
+
+## Least sure about
+
+- **CPU limit omitted (Task 3).** Deliberate — a CPU limit mostly buys
+  throttling on a cluster that isn't oversubscribed. What would change my mind:
+  a shared/multi-tenant cluster with untrusted neighbours, or evidence of this
+  service starving others. Then the limit goes back.
+- **Soft topology spread (Task 3).** It can transiently put both dev replicas on
+  one node (e.g. straight after a drain), which is a single point of failure
+  until the next rollout. A hard `podAntiAffinity` fixes that but strands prod's
+  third replica `Pending` on a 2-node cluster. What would change my mind: a
+  cluster with ≥3 schedulable nodes — then hard anti-affinity is affordable.
+- **PDB `minAvailable: 1`.** It's a floor, not "keep N−1", so draining a node
+  holding 2 of prod's 3 pods drops prod to 1 briefly. Acceptable for "survive
+  one node"; for real prod I'd use a percentage or `replicaCount - 1`.
+- **NodePort couples `cluster/kind-config.yaml` to a chart value.** The nodePort
+  numbers have to agree in two files. An ingress removes the coupling at the
+  cost of a controller to run and document. Fine for a local hand-off; I'd
+  reconsider for anything real.
+- **Distroless base pinned by tag, not digest (Task 1); single-arch build.**
+  Fine locally; a registry image should be digest-pinned and multi-arch.
+- **`terminationGracePeriodSeconds` hard-coded at 45.** Safe for the default
+  timings; if an operator raises `WARMUP`/`SHUTDOWN_DELAY`/`DRAIN_TIMEOUT` they
+  must raise this too. Considered computing it in the template and chose an
+  explicit, eyeball-able number with a comment instead.
+
+## For a genuinely production-facing deployment
+
+- **Image:** digest-pin base and builder, build multi-arch, sign with cosign,
+  generate and publish an SBOM, gate the pipeline on a vulnerability scan, push
+  to a real registry. Move `go test` out of the Dockerfile into a dedicated CI
+  stage with its own cache.
+- **Cluster:** a managed control plane (EKS/GKE/AKS), ≥3 nodes spread across
+  availability zones, real ingress with TLS (cert-manager) and DNS
+  (external-dns). Topology spread across zones, not just hostname.
+- **Chart:** hard anti-affinity (affordable with ≥3 nodes), PDB as a percentage,
+  a NetworkPolicy (kind's default CNI doesn't enforce them, so there's no point
+  here), resource limits revisited per tenancy model, HPA if load actually
+  varies, a ServiceMonitor once the Prometheus operator is a given.
+- **Terraform:** remote backend (S3+DynamoDB / GCS / TFC) with locking and
+  per-env state isolation; consume the chart from a versioned registry, not a
+  path, so infra state doesn't depend on the working tree; plan/apply in CI
+  behind a manual approval; a real secret store if any secret config appears.
+- **Delivery:** GitOps (Argo CD / Flux) as the only way changes reach the
+  cluster — no local `terraform apply` against prod. Drift detection and alerts.
+- **Observability:** Prometheus operator + Grafana dashboards, alert routing to
+  an on-call tool, SLO-based alerting rather than a raw error-rate threshold.
+
+## Deliberately left out
+
+- **Ingress / TLS / DNS** — NodePort + kind port-mapping is enough to be
+  genuinely reachable from the host, with nothing extra to install.
+- **HPA** — no load-based scaling requirement, and it fights a
+  Terraform-managed `replicaCount`.
+- **NetworkPolicy** — kind's default CNI (kindnet) doesn't enforce them, so
+  adding one would be security theatre.
+- **Secrets management** — this service has no secret config (`GREETING_NAME`
+  isn't sensitive). A ConfigMap is the honest representation.
+- **Multi-arch images** — no registry in the loop, and the host is single-arch.
+- **Remote Terraform backend** — local state is fine for a single operator on a
+  local cluster.
+- **`helm test` hooks** — the rolling-update and node-drain tests I ran by hand
+  exercise far more than a smoke test would.
+- **Log aggregation / structured-logging config** — the app already logs
+  structured lines to stdout; there's no log stack on a kind cluster to ship to.
+
+---
+
 ## Extensions — order and why
 
-_TODO_
+_TODO — filled in as extensions are done._
 
 ## What's missing / next
 
-_TODO_
+_TODO — filled in at the end._

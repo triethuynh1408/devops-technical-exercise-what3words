@@ -1,0 +1,75 @@
+# Shared defaults. Per-environment files (values-dev.yaml / values-prod.yaml)
+# override only what differs. Terraform (Task 4) layers on top of these.
+
+image:
+  repository: greeter
+  # Tag is set per environment. It also becomes the app's VERSION string
+  # (see configmap.yaml), so /version and greeter_build_info stay truthful.
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+# Two replicas by default so a single node loss leaves one serving. prod raises
+# this. There is no HPA — see DECISIONS.md.
+replicaCount: 2
+
+# Application configuration. Every value here is passed straight through to the
+# container as an env var via a ConfigMap. None of it is baked into the image,
+# so an operator changes any of it per environment without a rebuild.
+config:
+  # The one required setting. Deliberately a placeholder, not a real name, so a
+  # misconfigured environment is obvious rather than silently "friend" in prod.
+  greetingName: "friend"
+  port: 8080
+  # Startup: /readyz returns 503 for this long after the process starts.
+  warmupSeconds: 30
+  # Shutdown step 1: after SIGTERM, keep serving for this long while already
+  # reporting not-ready, so the cluster can pull the endpoint first.
+  shutdownDelaySeconds: 10
+  # Shutdown step 2: then stop accepting connections and wait up to this long
+  # for in-flight requests to finish.
+  drainTimeoutSeconds: 20
+
+# MUST be >= shutdownDelaySeconds + drainTimeoutSeconds, plus headroom for the
+# kubelet and container runtime. If you raise the three timings above, raise
+# this too, or Kubernetes will SIGKILL the pod mid-drain.
+# 10 + 20 + 15 = 45.
+terminationGracePeriodSeconds: 45
+
+service:
+  # NodePort so the service is reachable from outside the cluster with no extra
+  # components. The nodePort is pinned because cluster/kind-config.yaml maps it
+  # to localhost:8080 on the host. See DECISIONS.md for the ingress trade-off.
+  type: NodePort
+  port: 80
+  nodePort: 30080
+
+# Spread pods across nodes so losing one node cannot take out every replica.
+# Soft (ScheduleAnyway), not a hard podAntiAffinity: on a 2-worker cluster a
+# hard rule strands prod's 3rd replica as Pending forever and stalls rollouts.
+topologySpread:
+  maxSkew: 1
+  whenUnsatisfiable: ScheduleAnyway
+
+# Voluntary-disruption floor. `kubectl drain` (Extension D) will not evict the
+# last ready pod while this holds.
+pdb:
+  minAvailable: 1
+
+# Rolling updates never drop below the desired ready count.
+rollingUpdate:
+  maxUnavailable: 0
+  maxSurge: 1
+
+# The Go service is tiny. Memory gets a limit (OOM protection); CPU gets a
+# request but no limit, to avoid throttling a latency-sensitive path. This is a
+# deliberate departure from the usual "always set both" — see DECISIONS.md.
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    memory: 64Mi
+
+# Scrape annotations for the Prometheus in Extension B. Harmless if unused.
+metrics:
+  annotations: true

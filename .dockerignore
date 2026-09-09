@@ -1,0 +1,8 @@
+# The build only needs the Go sources under app/. Keep everything else out of
+# the context so builds are fast and cache keys don't churn on unrelated edits.
+*
+!app/
+
+# Even within app/, exclude local build output and OS cruft.
+app/greeter
+**/.DS_Store

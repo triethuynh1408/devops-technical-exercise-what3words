@@ -1,0 +1,14 @@
+# prod overrides. Only what differs from values.yaml.
+config:
+  greetingName: "what3words"
+
+image:
+  tag: "1.0.0"
+
+# Three replicas: on the 2-worker cluster this lands 2+1 across the nodes, so
+# losing either node still leaves at least one pod serving.
+replicaCount: 3
+
+service:
+  # host localhost:8081 -> this nodePort (cluster/kind-config.yaml)
+  nodePort: 30081

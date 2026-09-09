@@ -1,0 +1,31 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: w3w-exercise
+
+# One control-plane + two workers. The app is scheduled only onto the two
+# workers (the control-plane keeps its default NoSchedule taint), so "drain a
+# worker and the service stays up" in Task 3 / Extension D is a genuine test
+# rather than a formality.
+#
+# Node image pinned by digest so the Kubernetes version is identical on any
+# machine. This is the multi-arch index for kindest/node:v1.37.0, the default
+# that ships with kind v0.33.0 — resolves to arm64 or amd64 automatically.
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+    # Publish each environment's NodePort on the host: dev on localhost:8080
+    # (nodePort 30080), prod on localhost:8081 (nodePort 30081). kube-proxy
+    # routes a NodePort from any node, so mapping them on the control-plane
+    # still reaches pods on the workers, and it lets the two workers stay
+    # byte-for-byte identical for the node-loss test.
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 8080
+        protocol: TCP
+      - containerPort: 30081
+        hostPort: 8081
+        protocol: TCP
+  - role: worker
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
+  - role: worker
+    image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5

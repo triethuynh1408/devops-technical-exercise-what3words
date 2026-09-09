@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "greeter.fullname" . }}
+  labels:
+    {{- include "greeter.labels" . | nindent 4 }}
+spec:
+  # Voluntary disruptions (node drain, Extension D) will not evict the last
+  # ready pod. With replicaCount >= 2 this always allows one node to be drained.
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "greeter.selectorLabels" . | nindent 6 }}

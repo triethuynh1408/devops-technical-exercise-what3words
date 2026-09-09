@@ -53,7 +53,9 @@ LABEL org.opencontainers.image.title="greeter" \
 COPY --from=build /out/greeter /greeter
 
 # Redundant with the base image's default, but explicit: never run as root.
-USER nonroot:nonroot
+# Numeric so the host / Kubernetes `runAsNonRoot` can always resolve it
+# (65532 is distroless's "nonroot" user).
+USER 65532:65532
 
 # Documentation only (does not publish the port). Matches the app's default PORT.
 EXPOSE 8080

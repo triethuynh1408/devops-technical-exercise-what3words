@@ -365,12 +365,20 @@ Order: **D → A → B → C**.
   `scripts/prove-rolling-update.sh`, evidence in `evidence/`. Node drain:
   140/140 requests (in-flight `/work?ms=500`) returned 200. Rolling update:
   140/140 returned 200. Both transcripts committed.
+- **A — done.** `.github/workflows/ci.yml`, six parallel jobs on every push /
+  PR: `go vet` + `go test -race -cover`; hadolint + release-identical image
+  build + Trivy scan failing on HIGH/CRITICAL; `helm lint` + render both
+  environments and validate with kubeconform; `terraform fmt -check` +
+  `validate` per environment; shellcheck. All six verified green locally.
+  hadolint flagged the non-numeric `USER nonroot` in the Dockerfile, so that's
+  now `USER 65532:65532` (also what `runAsNonRoot` wants).
+  Left out: pushing the image to a registry (no registry in scope), and
+  SHA-pinning the actions (major-tag pinned for readability; a real pipeline
+  pins digests via Renovate).
 
 ## What's missing / next
 
-- **Extensions A, B, C not done** (time-box). A is next: a GitHub Actions
-  workflow running `go test`, image build, `helm lint`, `terraform fmt -check`
-  and `validate`, and a `helm template | kubeconform`-style render check.
+- **Extensions B and C not done** (time-box).
 - **B:** a minimal Prometheus scraping `/metrics` via the pod annotations the
   chart already sets, one alert rule (high 5xx rate over a short window), shown
   firing with `/boom`.

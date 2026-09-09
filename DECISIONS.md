@@ -11,10 +11,14 @@ come after Task 4.
 
 ## Task 1 — Container image
 
-Two-stage `Dockerfile`. Build stage on `golang:1.22.12-bookworm` runs `go vet` and
+Two-stage `Dockerfile`. Build stage on `golang:1.26.8-bookworm` runs `go vet` and
 `go test ./...` before the build, so a broken test suite can't produce a tagged image —
 worth doing while there's no CI yet. Then `CGO_ENABLED=0 go build -trimpath -ldflags="-s -w"`
 for a static, stripped binary.
+
+`go.mod` says `go 1.22`, but that's a language floor, not a toolchain pin. I build
+with a current Go so the binary picks up the latest stdlib security fixes — 1.22 is
+EOL and Trivy in CI flags its stdlib CVEs (see Extension A). No application changes.
 
 Runtime stage is `gcr.io/distroless/static-debian12:nonroot`: the binary on top of CA
 certs and `/etc/passwd`, nothing else. No shell, no package manager, no libc. Runs as
@@ -365,16 +369,26 @@ Order: **D → A → B → C**.
   `scripts/prove-rolling-update.sh`, evidence in `evidence/`. Node drain:
   140/140 requests (in-flight `/work?ms=500`) returned 200. Rolling update:
   140/140 returned 200. Both transcripts committed.
-- **A — done.** `.github/workflows/ci.yml`, six parallel jobs on every push /
-  PR: `go vet` + `go test -race -cover`; hadolint + release-identical image
-  build + Trivy scan failing on HIGH/CRITICAL; `helm lint` + render both
-  environments and validate with kubeconform; `terraform fmt -check` +
-  `validate` per environment; shellcheck. All six verified green locally.
-  hadolint flagged the non-numeric `USER nonroot` in the Dockerfile, so that's
-  now `USER 65532:65532` (also what `runAsNonRoot` wants).
-  Left out: pushing the image to a registry (no registry in scope), and
-  SHA-pinning the actions (major-tag pinned for readability; a real pipeline
-  pins digests via Renovate).
+- **A — done, and run for real on GitHub.** `.github/workflows/ci.yml`, six
+  parallel jobs on every push / PR: `go vet` + `go test -race -cover`; hadolint
+  + release-identical image build + Trivy scan failing on HIGH/CRITICAL;
+  `helm lint` + render both environments and validate with kubeconform;
+  `terraform fmt -check` + `validate` per environment; shellcheck.
+
+  The first real run caught two things a local check hadn't:
+  1. `aquasecurity/trivy-action@0.28.0` doesn't resolve — that action only
+     publishes `v`-prefixed tags. Fixed to `@v0.36.0`.
+  2. With that fixed, Trivy flagged Go stdlib CVEs in the binary: the builder
+     was `golang:1.22.x`, and 1.22 is past end of security support. Bumped the
+     builder to `golang:1.26.8-bookworm` (`go.mod`'s `go 1.22` is only a
+     language floor); Trivy is now clean.
+
+  Earlier, hadolint flagged the non-numeric `USER nonroot` (DL3066) → now
+  `USER 65532:65532`, which is also what `runAsNonRoot` needs.
+
+  Left out: pushing the image to a registry (none in scope), and SHA-pinning
+  the actions (major-tag pinned for readability; a real pipeline pins digests
+  via Renovate).
 
 ## Where I got to
 
@@ -451,7 +465,7 @@ half-connected.
 - **Drive the rolling-update evidence from a real `terraform apply`** (change
   `greeting_name`) instead of `kubectl rollout restart` — same mechanism, but it
   would exercise the whole IaC path under load.
-- **Run CI once for real.** Every job's commands pass locally; the workflow
-  itself hasn't executed on a GitHub runner.
+- **SHA-pin the CI actions** and put Renovate on them + the base images, so
+  version drift shows up as a reviewable PR rather than a red build.
 - The broader production gaps are in "For a genuinely production-facing
   deployment" above.

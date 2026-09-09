@@ -1,7 +1,11 @@
 # ---- build stage -----------------------------------------------------------
 # Pinned to a patch release for reproducibility. A real pipeline would pin the
 # digest as well and bump both via Renovate/Dependabot.
-FROM golang:1.22.12-bookworm AS build
+#
+# go.mod declares `go 1.22`, but that's a language floor, not a toolchain pin:
+# building with a current Go gets the latest stdlib security fixes into the
+# binary (Trivy in CI flags the EOL 1.22 stdlib otherwise). No app changes.
+FROM golang:1.26.8-bookworm AS build
 
 # BuildKit provides these automatically; they let `docker buildx build
 # --platform` cross-compile without QEMU (the build is pure Go, CGO is off).

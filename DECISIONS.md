@@ -376,13 +376,82 @@ Order: **D → A → B → C**.
   SHA-pinning the actions (major-tag pinned for readability; a real pipeline
   pins digests via Renovate).
 
-## What's missing / next
+## Where I got to
 
-- **Extensions B and C not done** (time-box).
-- **B:** a minimal Prometheus scraping `/metrics` via the pod annotations the
-  chart already sets, one alert rule (high 5xx rate over a short window), shown
-  firing with `/boom`.
-- **C:** Argo CD or Flux pointed at `deploy/greeter`. If repo auth is slow,
-  document the intended `Application` / `Kustomization` and stop.
-- The soft-spread "two replicas on one node" behaviour would get a proper fix
-  on a ≥3-node cluster (hard anti-affinity) — noted under "least sure about".
+**Done and reproducible from a clean clone:** all five core tasks, plus
+extensions **D** (survival evidence) and **A** (CI). The full path is:
+
+```sh
+./cluster/create-cluster.sh                        # 3-node kind cluster
+./scripts/build-and-load.sh                        # build + side-load images
+cd terraform/environments/dev  && terraform init && terraform apply
+cd ../prod                     && terraform init && terraform apply
+curl http://localhost:8080/    # dev   -> "Hello dev team, ..."
+curl http://localhost:8081/    # prod  -> "Hello what3words, ..."
+./scripts/prove-node-drain.sh  && ./scripts/prove-rolling-update.sh
+```
+
+Every step here has been run end to end on this machine. Nothing is half-wired:
+if a file is in the repo, it works.
+
+**Not done (ran out of time-box): extensions B and C.**
+
+### B — Observability — what I'd do next
+
+The chart already puts `prometheus.io/scrape` / `path` / `port` annotations on
+the pods, so the wiring is: `helm install` a minimal Prometheus
+(`prometheus-community/prometheus`, server only, no Alertmanager needed to
+*show* a rule firing), with a scrape job that selects those annotations.
+
+The one alert I'd write — the one actually worth a page:
+
+```
+- alert: GreeterHighErrorRate
+  expr: |
+    sum(rate(greeter_http_requests_total{status=~"5.."}[2m]))
+      / sum(rate(greeter_http_requests_total[2m])) > 0.05
+  for: 5m
+  labels: { severity: page }
+  annotations:
+    summary: ">5% of greeter requests are 5xx over the last 2m"
+```
+
+Rationale: it fires on user-visible failure, it's a ratio so it doesn't
+false-alarm at low traffic the way a raw count would, and `for: 5m` rides out a
+single bad deploy or a scrape blip. Demo: `while true; do curl -s
+localhost:8080/boom; done`, watch it go Pending → Firing in the Prometheus UI,
+screenshot into `evidence/`.
+
+Roughly 45 min: most of it is picking Prometheus config values and waiting out
+the `for:` window twice.
+
+### C — GitOps — what I'd do next
+
+Argo CD (more familiar to me than Flux). The real decision is the boundary with
+Terraform, because both want to own the release:
+
+- Terraform's job shrinks to **bootstrap** — install the Argo CD chart and one
+  root `Application` (app-of-apps) — and it stops managing the `helm_release`.
+- The root `Application` points at `deploy/greeter` in this repo with the dev
+  values and `syncPolicy.automated`; a second one does prod. A commit that
+  changes `values-dev.yaml` then changes the cluster with no `terraform apply`.
+
+If repo auth ate the time I'd commit the two `Application` manifests and the
+Terraform bootstrap module unapplied, with this note, rather than leave it
+half-connected.
+
+### What I'd do differently with more time
+
+- **A third worker node.** Two workers forces the soft-vs-hard anti-affinity
+  compromise (see "least sure about"). With three, dev gets a hard
+  `podAntiAffinity` and the "two replicas on one node" wrinkle disappears.
+- **Rewrite `soak.sh` as a tiny Go program or use `vegeta`.** The bash version
+  works and is dependency-free, but the background-process handling in the
+  `prove-*` scripts cost me time to get reliable.
+- **Drive the rolling-update evidence from a real `terraform apply`** (change
+  `greeting_name`) instead of `kubectl rollout restart` — same mechanism, but it
+  would exercise the whole IaC path under load.
+- **Run CI once for real.** Every job's commands pass locally; the workflow
+  itself hasn't executed on a GitHub runner.
+- The broader production gaps are in "For a genuinely production-facing
+  deployment" above.

@@ -1,0 +1,185 @@
+### node drain under load — 2026-09-09T03:41:35Z
+
+--- pods before ---
+NAME                           READY   STATUS    RESTARTS   AGE   IP            NODE                   NOMINATED NODE   READINESS GATES
+greeter-dev-6f89b66b85-jgcmb   1/1     Running   0          66s   10.244.1.17   w3w-exercise-worker2   <none>           <none>
+greeter-dev-6f89b66b85-xpb42   1/1     Running   0          66s   10.244.2.15   w3w-exercise-worker    <none>           <none>
+target node to drain: w3w-exercise-worker2
+
+--- load: 140 requests to http://localhost:8080/work?ms=500, drain fires after ~10s ---
+--- drain start 2026-09-09T03:41:45Z ---
+node/w3w-exercise-worker2 cordoned
+Warning: ignoring DaemonSet-managed Pods: kube-system/kindnet-4srds, kube-system/kube-proxy-b7dm9
+evicting pod greeter-prod/greeter-prod-5f4d8f75f6-zhngx
+evicting pod greeter-dev/greeter-dev-6f89b66b85-jgcmb
+evicting pod greeter-prod/greeter-prod-5f4d8f75f6-8j8b6
+pod/greeter-prod-5f4d8f75f6-8j8b6 evicted
+pod/greeter-dev-6f89b66b85-jgcmb evicted
+pod/greeter-prod-5f4d8f75f6-zhngx evicted
+node/w3w-exercise-worker2 drained
+--- drain returned 2026-09-09T03:41:57Z ---
+NAME                           READY   STATUS    RESTARTS   AGE   IP            NODE                  NOMINATED NODE   READINESS GATES
+greeter-dev-6f89b66b85-nvpl8   0/1     Running   0          11s   10.244.2.17   w3w-exercise-worker   <none>           <none>
+greeter-dev-6f89b66b85-xpb42   1/1     Running   0          88s   10.244.2.15   w3w-exercise-worker   <none>           <none>
+
+--- wait for the deployment to be fully available again ---
+Waiting for deployment "greeter-dev" rollout to finish: 1 of 2 updated replicas are available...
+deployment "greeter-dev" successfully rolled out
+--- available 2026-09-09T03:42:17Z ---
+NAME                           READY   STATUS    RESTARTS   AGE    IP            NODE                  NOMINATED NODE   READINESS GATES
+greeter-dev-6f89b66b85-nvpl8   1/1     Running   0          31s    10.244.2.17   w3w-exercise-worker   <none>           <none>
+greeter-dev-6f89b66b85-xpb42   1/1     Running   0          108s   10.244.2.15   w3w-exercise-worker   <none>           <none>
+
+--- waiting for the load run to finish ---
+
+--- uncordon w3w-exercise-worker2 ---
+node/w3w-exercise-worker2 uncordoned
+
+================ soak log (every request) ================
+2026-09-09T03:41:36Z seq=1 code=200 t=0.504544 OK
+2026-09-09T03:41:37Z seq=2 code=200 t=0.505846 OK
+2026-09-09T03:41:37Z seq=3 code=200 t=0.505119 OK
+2026-09-09T03:41:38Z seq=4 code=200 t=0.504249 OK
+2026-09-09T03:41:38Z seq=5 code=200 t=0.503752 OK
+2026-09-09T03:41:39Z seq=6 code=200 t=0.503115 OK
+2026-09-09T03:41:40Z seq=7 code=200 t=0.506164 OK
+2026-09-09T03:41:40Z seq=8 code=200 t=0.503482 OK
+2026-09-09T03:41:41Z seq=9 code=200 t=0.505418 OK
+2026-09-09T03:41:42Z seq=10 code=200 t=0.503940 OK
+2026-09-09T03:41:42Z seq=11 code=200 t=0.503454 OK
+2026-09-09T03:41:43Z seq=12 code=200 t=0.504470 OK
+2026-09-09T03:41:43Z seq=13 code=200 t=0.504618 OK
+2026-09-09T03:41:44Z seq=14 code=200 t=0.503924 OK
+2026-09-09T03:41:45Z seq=15 code=200 t=0.503629 OK
+2026-09-09T03:41:45Z seq=16 code=200 t=0.504096 OK
+2026-09-09T03:41:46Z seq=17 code=200 t=0.502832 OK
+2026-09-09T03:41:47Z seq=18 code=200 t=0.504108 OK
+2026-09-09T03:41:47Z seq=19 code=200 t=0.503911 OK
+2026-09-09T03:41:48Z seq=20 code=200 t=0.504922 OK
+2026-09-09T03:41:49Z seq=21 code=200 t=0.505572 OK
+2026-09-09T03:41:49Z seq=22 code=200 t=0.502439 OK
+2026-09-09T03:41:50Z seq=23 code=200 t=0.504425 OK
+2026-09-09T03:41:50Z seq=24 code=200 t=0.505321 OK
+2026-09-09T03:41:51Z seq=25 code=200 t=0.503675 OK
+2026-09-09T03:41:52Z seq=26 code=200 t=0.503107 OK
+2026-09-09T03:41:52Z seq=27 code=200 t=0.503949 OK
+2026-09-09T03:41:53Z seq=28 code=200 t=0.503510 OK
+2026-09-09T03:41:54Z seq=29 code=200 t=0.503908 OK
+2026-09-09T03:41:54Z seq=30 code=200 t=0.503239 OK
+2026-09-09T03:41:55Z seq=31 code=200 t=0.503761 OK
+2026-09-09T03:41:55Z seq=32 code=200 t=0.504914 OK
+2026-09-09T03:41:56Z seq=33 code=200 t=0.502776 OK
+2026-09-09T03:41:57Z seq=34 code=200 t=0.502835 OK
+2026-09-09T03:41:57Z seq=35 code=200 t=0.505470 OK
+2026-09-09T03:41:58Z seq=36 code=200 t=0.503178 OK
+2026-09-09T03:41:59Z seq=37 code=200 t=0.503738 OK
+2026-09-09T03:41:59Z seq=38 code=200 t=0.504201 OK
+2026-09-09T03:42:00Z seq=39 code=200 t=0.506403 OK
+2026-09-09T03:42:00Z seq=40 code=200 t=0.502803 OK
+2026-09-09T03:42:01Z seq=41 code=200 t=0.506256 OK
+2026-09-09T03:42:02Z seq=42 code=200 t=0.504242 OK
+2026-09-09T03:42:02Z seq=43 code=200 t=0.504418 OK
+2026-09-09T03:42:03Z seq=44 code=200 t=0.503852 OK
+2026-09-09T03:42:04Z seq=45 code=200 t=0.504892 OK
+2026-09-09T03:42:04Z seq=46 code=200 t=0.502870 OK
+2026-09-09T03:42:05Z seq=47 code=200 t=0.503514 OK
+2026-09-09T03:42:06Z seq=48 code=200 t=0.503479 OK
+2026-09-09T03:42:06Z seq=49 code=200 t=0.504257 OK
+2026-09-09T03:42:07Z seq=50 code=200 t=0.504320 OK
+2026-09-09T03:42:07Z seq=51 code=200 t=0.506398 OK
+2026-09-09T03:42:08Z seq=52 code=200 t=0.504581 OK
+2026-09-09T03:42:09Z seq=53 code=200 t=0.503326 OK
+2026-09-09T03:42:09Z seq=54 code=200 t=0.506289 OK
+2026-09-09T03:42:10Z seq=55 code=200 t=0.502463 OK
+2026-09-09T03:42:11Z seq=56 code=200 t=0.507263 OK
+2026-09-09T03:42:11Z seq=57 code=200 t=0.503415 OK
+2026-09-09T03:42:12Z seq=58 code=200 t=0.503598 OK
+2026-09-09T03:42:13Z seq=59 code=200 t=0.505036 OK
+2026-09-09T03:42:13Z seq=60 code=200 t=0.504213 OK
+2026-09-09T03:42:14Z seq=61 code=200 t=0.503827 OK
+2026-09-09T03:42:14Z seq=62 code=200 t=0.505545 OK
+2026-09-09T03:42:15Z seq=63 code=200 t=0.507036 OK
+2026-09-09T03:42:16Z seq=64 code=200 t=0.502333 OK
+2026-09-09T03:42:16Z seq=65 code=200 t=0.505512 OK
+2026-09-09T03:42:17Z seq=66 code=200 t=0.505034 OK
+2026-09-09T03:42:18Z seq=67 code=200 t=0.503294 OK
+2026-09-09T03:42:18Z seq=68 code=200 t=0.505402 OK
+2026-09-09T03:42:19Z seq=69 code=200 t=0.503206 OK
+2026-09-09T03:42:19Z seq=70 code=200 t=0.503692 OK
+2026-09-09T03:42:20Z seq=71 code=200 t=0.504339 OK
+2026-09-09T03:42:21Z seq=72 code=200 t=0.502616 OK
+2026-09-09T03:42:21Z seq=73 code=200 t=0.502872 OK
+2026-09-09T03:42:22Z seq=74 code=200 t=0.501966 OK
+2026-09-09T03:42:23Z seq=75 code=200 t=0.504747 OK
+2026-09-09T03:42:23Z seq=76 code=200 t=0.506490 OK
+2026-09-09T03:42:24Z seq=77 code=200 t=0.503742 OK
+2026-09-09T03:42:25Z seq=78 code=200 t=0.504185 OK
+2026-09-09T03:42:25Z seq=79 code=200 t=0.504119 OK
+2026-09-09T03:42:26Z seq=80 code=200 t=0.504292 OK
+2026-09-09T03:42:26Z seq=81 code=200 t=0.504819 OK
+2026-09-09T03:42:27Z seq=82 code=200 t=0.505096 OK
+2026-09-09T03:42:28Z seq=83 code=200 t=0.504617 OK
+2026-09-09T03:42:28Z seq=84 code=200 t=0.507733 OK
+2026-09-09T03:42:29Z seq=85 code=200 t=0.503589 OK
+2026-09-09T03:42:30Z seq=86 code=200 t=0.503894 OK
+2026-09-09T03:42:30Z seq=87 code=200 t=0.505522 OK
+2026-09-09T03:42:31Z seq=88 code=200 t=0.503616 OK
+2026-09-09T03:42:31Z seq=89 code=200 t=0.502215 OK
+2026-09-09T03:42:32Z seq=90 code=200 t=0.504258 OK
+2026-09-09T03:42:33Z seq=91 code=200 t=0.503189 OK
+2026-09-09T03:42:33Z seq=92 code=200 t=0.503363 OK
+2026-09-09T03:42:34Z seq=93 code=200 t=0.507603 OK
+2026-09-09T03:42:35Z seq=94 code=200 t=0.504177 OK
+2026-09-09T03:42:35Z seq=95 code=200 t=0.504550 OK
+2026-09-09T03:42:36Z seq=96 code=200 t=0.504206 OK
+2026-09-09T03:42:37Z seq=97 code=200 t=0.503535 OK
+2026-09-09T03:42:37Z seq=98 code=200 t=0.503500 OK
+2026-09-09T03:42:38Z seq=99 code=200 t=0.504128 OK
+2026-09-09T03:42:38Z seq=100 code=200 t=0.504047 OK
+2026-09-09T03:42:39Z seq=101 code=200 t=0.504482 OK
+2026-09-09T03:42:40Z seq=102 code=200 t=0.505298 OK
+2026-09-09T03:42:40Z seq=103 code=200 t=0.504330 OK
+2026-09-09T03:42:41Z seq=104 code=200 t=0.505315 OK
+2026-09-09T03:42:42Z seq=105 code=200 t=0.505366 OK
+2026-09-09T03:42:42Z seq=106 code=200 t=0.504375 OK
+2026-09-09T03:42:43Z seq=107 code=200 t=0.504462 OK
+2026-09-09T03:42:44Z seq=108 code=200 t=0.505492 OK
+2026-09-09T03:42:44Z seq=109 code=200 t=0.503868 OK
+2026-09-09T03:42:45Z seq=110 code=200 t=0.503482 OK
+2026-09-09T03:42:45Z seq=111 code=200 t=0.503101 OK
+2026-09-09T03:42:46Z seq=112 code=200 t=0.503562 OK
+2026-09-09T03:42:47Z seq=113 code=200 t=0.504133 OK
+2026-09-09T03:42:47Z seq=114 code=200 t=0.504696 OK
+2026-09-09T03:42:48Z seq=115 code=200 t=0.503223 OK
+2026-09-09T03:42:49Z seq=116 code=200 t=0.505678 OK
+2026-09-09T03:42:49Z seq=117 code=200 t=0.503829 OK
+2026-09-09T03:42:50Z seq=118 code=200 t=0.503982 OK
+2026-09-09T03:42:50Z seq=119 code=200 t=0.504950 OK
+2026-09-09T03:42:51Z seq=120 code=200 t=0.503473 OK
+2026-09-09T03:42:52Z seq=121 code=200 t=0.505217 OK
+2026-09-09T03:42:52Z seq=122 code=200 t=0.507944 OK
+2026-09-09T03:42:53Z seq=123 code=200 t=0.506255 OK
+2026-09-09T03:42:54Z seq=124 code=200 t=0.504297 OK
+2026-09-09T03:42:54Z seq=125 code=200 t=0.504285 OK
+2026-09-09T03:42:55Z seq=126 code=200 t=0.504602 OK
+2026-09-09T03:42:56Z seq=127 code=200 t=0.503949 OK
+2026-09-09T03:42:56Z seq=128 code=200 t=0.503423 OK
+2026-09-09T03:42:57Z seq=129 code=200 t=0.504127 OK
+2026-09-09T03:42:57Z seq=130 code=200 t=0.504758 OK
+2026-09-09T03:42:58Z seq=131 code=200 t=0.504208 OK
+2026-09-09T03:42:59Z seq=132 code=200 t=0.506355 OK
+2026-09-09T03:42:59Z seq=133 code=200 t=0.504642 OK
+2026-09-09T03:43:00Z seq=134 code=200 t=0.503795 OK
+2026-09-09T03:43:01Z seq=135 code=200 t=0.504314 OK
+2026-09-09T03:43:01Z seq=136 code=200 t=0.505510 OK
+2026-09-09T03:43:02Z seq=137 code=200 t=0.508841 OK
+2026-09-09T03:43:03Z seq=138 code=200 t=0.502884 OK
+2026-09-09T03:43:03Z seq=139 code=200 t=0.504344 OK
+2026-09-09T03:43:04Z seq=140 code=200 t=0.503803 OK
+
+==== soak summary: http://localhost:8080/work?ms=500 ====
+requests: 140
+by code:
+  200: 140
+non-2xx: none
+### done

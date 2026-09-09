@@ -342,8 +342,39 @@ that than the alternative.
 
 ## Extensions — order and why
 
-_TODO — filled in as extensions are done._
+Order: **D → A → B → C**.
+
+- **D (prove it survives) first.** It's the cheapest — the node-drain and
+  rolling-update scenarios were already most of the way there from Task 3
+  testing — and it's the highest-confidence thing to nail down, because it
+  directly validates the core deliverable. If the packaging were wrong, this is
+  where it shows. Low cost, de-risks everything above it.
+- **A (CI) second.** Table-stakes for the role and it protects every future
+  change: `go test`, image build, `helm lint`, `terraform fmt`/`validate`,
+  a config-render check. Medium cost, permanent value.
+- **B (observability) third.** The brief's intro asks for "operable", and this
+  is the half that isn't covered by probes and a PDB. Costs more (stand up a
+  Prometheus, write and demo an alert) so it comes after the two cheaper wins.
+- **C (GitOps) last.** Highest plumbing cost (install a controller, wire repo
+  access) and the brief explicitly says document-and-move-on is acceptable if
+  auth eats time — so it's the right one to run out of runway on.
+
+### Done
+
+- **D — done.** `scripts/soak.sh` + `scripts/prove-node-drain.sh` +
+  `scripts/prove-rolling-update.sh`, evidence in `evidence/`. Node drain:
+  140/140 requests (in-flight `/work?ms=500`) returned 200. Rolling update:
+  140/140 returned 200. Both transcripts committed.
 
 ## What's missing / next
 
-_TODO — filled in at the end._
+- **Extensions A, B, C not done** (time-box). A is next: a GitHub Actions
+  workflow running `go test`, image build, `helm lint`, `terraform fmt -check`
+  and `validate`, and a `helm template | kubeconform`-style render check.
+- **B:** a minimal Prometheus scraping `/metrics` via the pod annotations the
+  chart already sets, one alert rule (high 5xx rate over a short window), shown
+  firing with `/boom`.
+- **C:** Argo CD or Flux pointed at `deploy/greeter`. If repo auth is slow,
+  document the intended `Application` / `Kustomization` and stop.
+- The soft-spread "two replicas on one node" behaviour would get a proper fix
+  on a ≥3-node cluster (hard anti-affinity) — noted under "least sure about".

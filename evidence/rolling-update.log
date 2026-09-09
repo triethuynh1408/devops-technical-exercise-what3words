@@ -1,0 +1,173 @@
+### rolling update under load — 2026-09-09T03:43:31Z
+
+--- pods before ---
+NAME                           READY   STATUS    RESTARTS   AGE    IP            NODE                  NOMINATED NODE   READINESS GATES
+greeter-dev-6f89b66b85-nvpl8   1/1     Running   0          105s   10.244.2.17   w3w-exercise-worker   <none>           <none>
+greeter-dev-6f89b66b85-xpb42   1/1     Running   0          3m2s   10.244.2.15   w3w-exercise-worker   <none>           <none>
+
+--- load: 140 requests to http://localhost:8080/, rollout fires after ~5s ---
+--- rollout start 2026-09-09T03:43:36Z ---
+deployment.apps/greeter-dev restarted
+Waiting for deployment "greeter-dev" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "greeter-dev" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "greeter-dev" rollout to finish: 1 out of 2 new replicas have been updated...
+Waiting for deployment "greeter-dev" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "greeter-dev" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "greeter-dev" rollout to finish: 1 old replicas are pending termination...
+deployment "greeter-dev" successfully rolled out
+--- rollout complete 2026-09-09T03:44:37Z ---
+NAME                           READY   STATUS        RESTARTS   AGE    IP            NODE                   NOMINATED NODE   READINESS GATES
+greeter-dev-6f89b66b85-xpb42   1/1     Terminating   0          4m8s   10.244.2.15   w3w-exercise-worker    <none>           <none>
+greeter-dev-788c7dbcd6-5l2tb   1/1     Running       0          61s    10.244.1.18   w3w-exercise-worker2   <none>           <none>
+greeter-dev-788c7dbcd6-t4hnr   1/1     Running       0          31s    10.244.1.19   w3w-exercise-worker2   <none>           <none>
+
+--- waiting for the load run to finish ---
+
+================ soak log (every request) ================
+2026-09-09T03:43:31Z seq=1 code=200 t=0.001957 OK
+2026-09-09T03:43:31Z seq=2 code=200 t=0.002414 OK
+2026-09-09T03:43:31Z seq=3 code=200 t=0.002447 OK
+2026-09-09T03:43:31Z seq=4 code=200 t=0.001836 OK
+2026-09-09T03:43:31Z seq=5 code=200 t=0.002169 OK
+2026-09-09T03:43:31Z seq=6 code=200 t=0.002291 OK
+2026-09-09T03:43:31Z seq=7 code=200 t=0.002567 OK
+2026-09-09T03:43:32Z seq=8 code=200 t=0.002159 OK
+2026-09-09T03:43:32Z seq=9 code=200 t=0.001944 OK
+2026-09-09T03:43:32Z seq=10 code=200 t=0.003823 OK
+2026-09-09T03:43:32Z seq=11 code=200 t=0.001915 OK
+2026-09-09T03:43:32Z seq=12 code=200 t=0.001952 OK
+2026-09-09T03:43:32Z seq=13 code=200 t=0.002985 OK
+2026-09-09T03:43:32Z seq=14 code=200 t=0.002305 OK
+2026-09-09T03:43:33Z seq=15 code=200 t=0.002747 OK
+2026-09-09T03:43:33Z seq=16 code=200 t=0.001491 OK
+2026-09-09T03:43:33Z seq=17 code=200 t=0.001888 OK
+2026-09-09T03:43:33Z seq=18 code=200 t=0.002003 OK
+2026-09-09T03:43:33Z seq=19 code=200 t=0.002159 OK
+2026-09-09T03:43:33Z seq=20 code=200 t=0.002580 OK
+2026-09-09T03:43:33Z seq=21 code=200 t=0.002628 OK
+2026-09-09T03:43:33Z seq=22 code=200 t=0.002750 OK
+2026-09-09T03:43:34Z seq=23 code=200 t=0.001770 OK
+2026-09-09T03:43:34Z seq=24 code=200 t=0.002280 OK
+2026-09-09T03:43:34Z seq=25 code=200 t=0.004006 OK
+2026-09-09T03:43:34Z seq=26 code=200 t=0.001967 OK
+2026-09-09T03:43:34Z seq=27 code=200 t=0.001213 OK
+2026-09-09T03:43:34Z seq=28 code=200 t=0.003105 OK
+2026-09-09T03:43:34Z seq=29 code=200 t=0.002398 OK
+2026-09-09T03:43:34Z seq=30 code=200 t=0.001913 OK
+2026-09-09T03:43:35Z seq=31 code=200 t=0.002769 OK
+2026-09-09T03:43:35Z seq=32 code=200 t=0.001674 OK
+2026-09-09T03:43:35Z seq=33 code=200 t=0.001993 OK
+2026-09-09T03:43:35Z seq=34 code=200 t=0.001461 OK
+2026-09-09T03:43:35Z seq=35 code=200 t=0.003260 OK
+2026-09-09T03:43:35Z seq=36 code=200 t=0.002772 OK
+2026-09-09T03:43:35Z seq=37 code=200 t=0.001793 OK
+2026-09-09T03:43:35Z seq=38 code=200 t=0.001806 OK
+2026-09-09T03:43:36Z seq=39 code=200 t=0.002770 OK
+2026-09-09T03:43:36Z seq=40 code=200 t=0.002754 OK
+2026-09-09T03:43:36Z seq=41 code=200 t=0.001033 OK
+2026-09-09T03:43:36Z seq=42 code=200 t=0.001219 OK
+2026-09-09T03:43:36Z seq=43 code=200 t=0.001314 OK
+2026-09-09T03:43:36Z seq=44 code=200 t=0.003068 OK
+2026-09-09T03:43:36Z seq=45 code=200 t=0.002022 OK
+2026-09-09T03:43:36Z seq=46 code=200 t=0.001965 OK
+2026-09-09T03:43:37Z seq=47 code=200 t=0.003485 OK
+2026-09-09T03:43:37Z seq=48 code=200 t=0.002761 OK
+2026-09-09T03:43:37Z seq=49 code=200 t=0.002822 OK
+2026-09-09T03:43:37Z seq=50 code=200 t=0.002601 OK
+2026-09-09T03:43:37Z seq=51 code=200 t=0.002381 OK
+2026-09-09T03:43:37Z seq=52 code=200 t=0.002430 OK
+2026-09-09T03:43:37Z seq=53 code=200 t=0.001841 OK
+2026-09-09T03:43:38Z seq=54 code=200 t=0.002030 OK
+2026-09-09T03:43:38Z seq=55 code=200 t=0.001934 OK
+2026-09-09T03:43:38Z seq=56 code=200 t=0.002196 OK
+2026-09-09T03:43:38Z seq=57 code=200 t=0.002071 OK
+2026-09-09T03:43:38Z seq=58 code=200 t=0.002283 OK
+2026-09-09T03:43:38Z seq=59 code=200 t=0.002017 OK
+2026-09-09T03:43:38Z seq=60 code=200 t=0.003253 OK
+2026-09-09T03:43:38Z seq=61 code=200 t=0.001171 OK
+2026-09-09T03:43:39Z seq=62 code=200 t=0.002154 OK
+2026-09-09T03:43:39Z seq=63 code=200 t=0.002572 OK
+2026-09-09T03:43:39Z seq=64 code=200 t=0.005220 OK
+2026-09-09T03:43:39Z seq=65 code=200 t=0.002657 OK
+2026-09-09T03:43:39Z seq=66 code=200 t=0.002405 OK
+2026-09-09T03:43:39Z seq=67 code=200 t=0.002602 OK
+2026-09-09T03:43:39Z seq=68 code=200 t=0.003208 OK
+2026-09-09T03:43:39Z seq=69 code=200 t=0.002060 OK
+2026-09-09T03:43:40Z seq=70 code=200 t=0.002592 OK
+2026-09-09T03:43:40Z seq=71 code=200 t=0.002467 OK
+2026-09-09T03:43:40Z seq=72 code=200 t=0.003039 OK
+2026-09-09T03:43:40Z seq=73 code=200 t=0.002619 OK
+2026-09-09T03:43:40Z seq=74 code=200 t=0.001985 OK
+2026-09-09T03:43:40Z seq=75 code=200 t=0.002662 OK
+2026-09-09T03:43:40Z seq=76 code=200 t=0.001718 OK
+2026-09-09T03:43:41Z seq=77 code=200 t=0.001580 OK
+2026-09-09T03:43:41Z seq=78 code=200 t=0.002704 OK
+2026-09-09T03:43:41Z seq=79 code=200 t=0.002053 OK
+2026-09-09T03:43:41Z seq=80 code=200 t=0.004279 OK
+2026-09-09T03:43:41Z seq=81 code=200 t=0.003505 OK
+2026-09-09T03:43:41Z seq=82 code=200 t=0.002761 OK
+2026-09-09T03:43:41Z seq=83 code=200 t=0.003244 OK
+2026-09-09T03:43:41Z seq=84 code=200 t=0.002755 OK
+2026-09-09T03:43:42Z seq=85 code=200 t=0.001458 OK
+2026-09-09T03:43:42Z seq=86 code=200 t=0.002536 OK
+2026-09-09T03:43:42Z seq=87 code=200 t=0.002701 OK
+2026-09-09T03:43:42Z seq=88 code=200 t=0.002600 OK
+2026-09-09T03:43:42Z seq=89 code=200 t=0.002543 OK
+2026-09-09T03:43:42Z seq=90 code=200 t=0.002639 OK
+2026-09-09T03:43:42Z seq=91 code=200 t=0.001498 OK
+2026-09-09T03:43:42Z seq=92 code=200 t=0.003092 OK
+2026-09-09T03:43:43Z seq=93 code=200 t=0.002275 OK
+2026-09-09T03:43:43Z seq=94 code=200 t=0.002010 OK
+2026-09-09T03:43:43Z seq=95 code=200 t=0.003606 OK
+2026-09-09T03:43:43Z seq=96 code=200 t=0.001394 OK
+2026-09-09T03:43:43Z seq=97 code=200 t=0.001471 OK
+2026-09-09T03:43:43Z seq=98 code=200 t=0.003322 OK
+2026-09-09T03:43:43Z seq=99 code=200 t=0.006642 OK
+2026-09-09T03:43:43Z seq=100 code=200 t=0.002105 OK
+2026-09-09T03:43:44Z seq=101 code=200 t=0.002099 OK
+2026-09-09T03:43:44Z seq=102 code=200 t=0.002460 OK
+2026-09-09T03:43:44Z seq=103 code=200 t=0.001703 OK
+2026-09-09T03:43:44Z seq=104 code=200 t=0.001569 OK
+2026-09-09T03:43:44Z seq=105 code=200 t=0.001589 OK
+2026-09-09T03:43:44Z seq=106 code=200 t=0.001748 OK
+2026-09-09T03:43:44Z seq=107 code=200 t=0.001405 OK
+2026-09-09T03:43:45Z seq=108 code=200 t=0.002019 OK
+2026-09-09T03:43:45Z seq=109 code=200 t=0.001817 OK
+2026-09-09T03:43:45Z seq=110 code=200 t=0.001562 OK
+2026-09-09T03:43:45Z seq=111 code=200 t=0.001767 OK
+2026-09-09T03:43:45Z seq=112 code=200 t=0.001690 OK
+2026-09-09T03:43:45Z seq=113 code=200 t=0.001656 OK
+2026-09-09T03:43:45Z seq=114 code=200 t=0.002261 OK
+2026-09-09T03:43:45Z seq=115 code=200 t=0.004384 OK
+2026-09-09T03:43:46Z seq=116 code=200 t=0.001993 OK
+2026-09-09T03:43:46Z seq=117 code=200 t=0.001719 OK
+2026-09-09T03:43:46Z seq=118 code=200 t=0.003726 OK
+2026-09-09T03:43:46Z seq=119 code=200 t=0.001971 OK
+2026-09-09T03:43:46Z seq=120 code=200 t=0.003121 OK
+2026-09-09T03:43:46Z seq=121 code=200 t=0.001820 OK
+2026-09-09T03:43:46Z seq=122 code=200 t=0.002943 OK
+2026-09-09T03:43:46Z seq=123 code=200 t=0.002834 OK
+2026-09-09T03:43:47Z seq=124 code=200 t=0.001074 OK
+2026-09-09T03:43:47Z seq=125 code=200 t=0.002036 OK
+2026-09-09T03:43:47Z seq=126 code=200 t=0.002636 OK
+2026-09-09T03:43:47Z seq=127 code=200 t=0.003211 OK
+2026-09-09T03:43:47Z seq=128 code=200 t=0.002475 OK
+2026-09-09T03:43:47Z seq=129 code=200 t=0.001806 OK
+2026-09-09T03:43:47Z seq=130 code=200 t=0.002809 OK
+2026-09-09T03:43:47Z seq=131 code=200 t=0.002800 OK
+2026-09-09T03:43:48Z seq=132 code=200 t=0.002389 OK
+2026-09-09T03:43:48Z seq=133 code=200 t=0.001690 OK
+2026-09-09T03:43:48Z seq=134 code=200 t=0.003042 OK
+2026-09-09T03:43:48Z seq=135 code=200 t=0.002108 OK
+2026-09-09T03:43:48Z seq=136 code=200 t=0.002711 OK
+2026-09-09T03:43:48Z seq=137 code=200 t=0.003207 OK
+2026-09-09T03:43:48Z seq=138 code=200 t=0.001538 OK
+2026-09-09T03:43:49Z seq=139 code=200 t=0.002946 OK
+2026-09-09T03:43:49Z seq=140 code=200 t=0.003337 OK
+
+==== soak summary: http://localhost:8080/ ====
+requests: 140
+by code:
+  200: 140
+non-2xx: none
+### done
